@@ -4,6 +4,7 @@ import streamlit as st
 from config import get_connection
 
 from analytics.anomaly import detect_anomalies
+from analytics.contribution import find_root_causes
 
 st.set_page_config(
     page_title="InsightFlow AI",
@@ -114,4 +115,15 @@ st.dataframe(
     anomaly_data[
         anomaly_data["is_anomaly"]
     ]
+)
+st.subheader("Root Cause Analysis")
+
+root_causes = find_root_causes(sales)
+
+st.dataframe(root_causes)
+
+worst_region = root_causes.index[0]
+
+st.warning(
+    f"Biggest revenue decline occurred in **{worst_region}**."
 )
