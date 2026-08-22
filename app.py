@@ -3,6 +3,7 @@ import streamlit as st
 
 from config import get_connection
 
+from analytics.anomaly import detect_anomalies
 
 st.set_page_config(
     page_title="InsightFlow AI",
@@ -101,3 +102,16 @@ except Exception as e:
     st.error(
         f"Unable to load dashboard data: {e}"
     )
+
+anomaly_data = detect_anomalies(
+    daily_revenue,
+    "revenue",
+)
+
+st.subheader("Detected Anomalies")
+
+st.dataframe(
+    anomaly_data[
+        anomaly_data["is_anomaly"]
+    ]
+)
