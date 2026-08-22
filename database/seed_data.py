@@ -98,5 +98,44 @@ def generate_sales_data():
     connection.close()
 
 
+from datetime import datetime
+
+def generate_reviews():
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    reviews = [
+        ("Laptop", 5, "Excellent performance and fast delivery."),
+        ("Laptop", 2, "Delivery was delayed."),
+        ("Phone", 1, "Package arrived late."),
+        ("Phone", 5, "Amazing phone and great service."),
+        ("Tablet", 3, "Average experience."),
+        ("Headphones", 1, "Poor sound quality."),
+        ("Headphones", 5, "Very comfortable and excellent sound."),
+        ("Laptop", 2, "Support took too long to respond."),
+        ("Phone", 1, "Delivery was delayed again."),
+        ("Tablet", 4, "Good value for money.")
+    ]
+
+    query = """
+        INSERT INTO customer_reviews
+        (review_date, product, rating, review_text)
+        VALUES (%s, %s, %s, %s)
+    """
+
+    data = [
+        (datetime.now(), product, rating, text)
+        for product, rating, text in reviews
+    ]
+
+    cursor.executemany(query, data)
+    connection.commit()
+
+    print(f"Inserted {len(data)} reviews.")
+
+    cursor.close()
+    connection.close()
+
 if __name__ == "__main__":
     generate_sales_data()
+    generate_reviews()

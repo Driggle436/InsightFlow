@@ -6,6 +6,8 @@ from config import get_connection
 from analytics.anomaly import detect_anomalies
 from analytics.contribution import find_root_causes
 
+from ai.sentiment import analyze_reviews
+
 st.set_page_config(
     page_title="InsightFlow AI",
     page_icon="📊",
@@ -35,6 +37,20 @@ def load_sales():
 
     return df
 
+@st.cache_data
+def load_reviews():
+    connection = get_connection()
+
+    query = """
+        SELECT *
+        FROM customer_reviews
+    """
+
+    reviews = pd.read_sql(query, connection)
+
+    connection.close()
+
+    return reviews
 
 st.title("📊 InsightFlow AI")
 
@@ -126,4 +142,28 @@ worst_region = root_causes.index[0]
 
 st.warning(
     f"Biggest revenue decline occurred in **{worst_region}**."
+)
+
+st.subheader("Customer Sentiment")
+
+reviews = load_reviews()
+reviews = analyze_reviews(reviews)
+
+sentiment_counts = (
+    reviews["sentiment"]
+    .value_counts()
+)
+
+st.bar_chart(sentiment_counts)
+
+negative_reviews = reviews[
+    reviews["sentiment"] == "Negative"
+]
+
+st.write("Recent Negative Reviews")
+
+st.dataframe(
+    negative_reviews[
+        ["product", "rating", "review_text"]
+    ]
 )
