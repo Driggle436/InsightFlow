@@ -6,5 +6,5 @@ scikit-learn
 mysql-connector-python
 textblob
 python-dotenv
-openai
+google-genai
 statsmodels
