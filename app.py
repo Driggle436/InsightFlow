@@ -5,6 +5,7 @@ from config import get_connection
 
 from analytics.anomaly import detect_anomalies
 from analytics.contribution import find_root_causes
+from analytics.confidence import calculate_confidence
 
 from ai.sentiment import analyze_reviews
 
@@ -375,6 +376,81 @@ try:
     negative_count = len(
         reviews[reviews["sentiment"] == "Negative"]
     )
+
+    confidence_score, confidence_components = calculate_confidence(
+    sales=sales,
+    daily_revenue=daily_revenue,
+    anomaly_data=anomaly_data,
+    root_causes=root_causes,
+    negative_reviews_count=negative_count,
+    )
+    
+    st.divider()
+    
+    st.subheader("🎯 Insight Confidence")
+    
+    confidence_col1, confidence_col2 = st.columns(
+            [1, 2]
+            )
+        
+    with confidence_col1:
+        
+                st.metric(
+                    "Confidence Score",
+                    f"{confidence_score}%"
+                )
+        
+    with confidence_col2:
+        
+        st.write(
+                    "Confidence is calculated from data freshness, "
+                    "data completeness, statistical strength, "
+                    "and supporting evidence."
+                )
+        
+    st.progress(
+            confidence_score / 100
+            )
+
+# CONFIDENCE BREAKDOWN
+
+    
+    st.write("### Confidence Breakdown")
+
+    confidence_table = pd.DataFrame(
+        {
+            "Factor": confidence_components.keys(),
+            "Score": confidence_components.values(),
+        }
+    )
+
+    st.dataframe(
+        confidence_table,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    if confidence_score >= 80:
+
+        st.success(
+            "High confidence: the insight is supported "
+            "by strong and sufficiently complete evidence."
+        )
+
+    elif confidence_score >= 60:
+
+        st.warning(
+            "Medium confidence: the insight is useful, "
+            "but additional evidence should be reviewed."
+        )
+
+    else:
+
+        st.error(
+            "Low confidence: insufficient evidence is "
+            "available to make a reliable conclusion."
+        )
+    
 
     if st.button("Generate AI Insight"):
 
