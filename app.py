@@ -103,6 +103,12 @@ st.caption(
     "AI-powered business intelligence and decision support"
 )
 
+st.sidebar.title("User Mode")
+
+persona = st.sidebar.selectbox(
+    "Choose your role",
+    ["CEO", "Sales Manager"]
+)
 
 # ---------------------------------------------------------
 # MAIN APPLICATION
@@ -374,13 +380,14 @@ try:
 
         with st.spinner("Analyzing business performance..."):
 
-            story = generate_story(
-                revenue_change=revenue_change,
-                worst_region=worst_region,
-                worst_change=worst_change,
-                negative_reviews_count=negative_count,
-            )
-
+                story = generate_story(
+        persona=persona,
+        revenue_change=revenue_change,
+        worst_region=worst_region,
+        worst_change=worst_change,
+        negative_reviews_count=negative_count,
+    )
+        st.markdown(f"### AI Analysis for {persona}")
         st.info(story)    
 
 

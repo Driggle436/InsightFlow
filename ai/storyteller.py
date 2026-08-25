@@ -21,51 +21,58 @@ client = genai.Client(
 
 
 def generate_story(
+    persona,
     revenue_change,
     worst_region,
     worst_change,
     negative_reviews_count,
 ):
 
-    prompt = f"""
-You are an executive business analyst for a business intelligence platform.
+    if persona == "CEO":
 
-Analyze the following verified business metrics.
+        role_instruction = """
+        Focus on strategic business outcomes.
+        Mention revenue, regional performance,
+        business risk, and executive actions.
+        """
+
+    else:
+
+        role_instruction = """
+        Focus on operational actions.
+        Mention the affected region,
+        customer issues,
+        and immediate sales actions.
+        """
+
+    prompt = f"""
+You are an AI business analyst.
+
+Role:
+{persona}
+
+Instructions:
+{role_instruction}
+
+Verified data:
 
 Revenue change:
 {revenue_change:.1f}%
 
-Worst-performing region:
+Worst region:
 {worst_region}
 
-Revenue change in that region:
+Regional decline:
 {worst_change:.1f}%
 
-Number of negative customer reviews:
+Negative reviews:
 {negative_reviews_count}
 
-Create a concise executive insight.
-
-Use exactly these sections:
-
-EXECUTIVE SUMMARY
-Explain what happened in 2-3 sentences.
-
-BUSINESS RISK
-Explain the most important risk.
-
-RECOMMENDED ACTION
-Give one practical action management should take.
-
-IMPORTANT:
-- Use only the numbers provided.
-- Do not invent additional data.
-- Do not claim causation that cannot be proven.
-- Keep the response under 150 words.
+Keep the response under 120 words.
 """
 
     response = client.models.generate_content(
-        model="gemini-3.1-flash-lite",
+        model="gemini-2.5-flash",
         contents=prompt,
     )
 
