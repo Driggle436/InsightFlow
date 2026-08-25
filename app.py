@@ -107,12 +107,16 @@ st.caption(
     "AI-powered business intelligence and decision support"
 )
 
-st.sidebar.title("User Mode")
+st.sidebar.title("InsightFlow Controls")
 
 persona = st.sidebar.selectbox(
     "Choose your role",
     ["CEO", "Sales Manager"]
 )
+
+st.sidebar.divider()
+
+st.sidebar.subheader("Dashboard Filters")
 
 # ---------------------------------------------------------
 # MAIN APPLICATION
@@ -126,8 +130,62 @@ try:
 
     sales = load_sales()
 
+    # -----------------------------------------------------
+    # FILTERS
+    # -----------------------------------------------------
+
+    sales["date"] = pd.to_datetime(sales["date"])
+
+    min_date = sales["date"].min()
+    max_date = sales["date"].max()
+
+    date_range = st.sidebar.date_input(
+        "Date Range",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date,
+    )
+
+    regions = ["All"] + sorted(sales["region"].unique().tolist())
+    selected_region = st.sidebar.selectbox(
+        "Region",
+        regions,
+    )
+
+    products = ["All"] + sorted(sales["product"].unique().tolist())
+    selected_product = st.sidebar.selectbox(
+        "Product",
+        products,
+    )
+
+    filtered_sales = sales.copy()
+
+    # Date filter
+    if len(date_range) == 2:
+        start_date, end_date = date_range
+
+        filtered_sales = filtered_sales[
+            (filtered_sales["date"] >= pd.Timestamp(start_date))
+            &
+            (filtered_sales["date"] <= pd.Timestamp(end_date))
+        ]
+
+    # Region filter
+    if selected_region != "All":
+        filtered_sales = filtered_sales[
+            filtered_sales["region"] == selected_region
+        ]
+
+    # Product filter
+    if selected_product != "All":
+        filtered_sales = filtered_sales[
+            filtered_sales["product"] == selected_product
+        ]
+
+    sales = filtered_sales
+
     if sales.empty:
-        st.warning("No sales data found in MySQL.")
+        st.warning("No data matches the selected filters.")
         st.stop()
 
 
@@ -165,7 +223,9 @@ try:
     # -----------------------------------------------------
     # KPI CARDS
     # -----------------------------------------------------
-
+    st.caption(
+    f"Showing: **{selected_region}** | **{selected_product}**"
+    )
     col1, col2, col3 = st.columns(3)
 
     col1.metric(
@@ -290,6 +350,16 @@ try:
         display_causes["Change %"]
         .round(1)
     )
+
+    display_causes = display_causes[
+    [
+        "Region",
+        "Previous Revenue",
+        "Current Revenue",
+        "Revenue Change",
+        "Change %",
+    ]
+]
 
     st.dataframe(
         display_causes,
@@ -459,16 +529,23 @@ try:
 
         with st.spinner("Analyzing business performance..."):
 
-            story = generate_story(
-                persona=persona,
-                revenue_change=revenue_change,
-                worst_region=worst_region,
-                worst_change=worst_change,
-                negative_reviews_count=negative_count,
-            )
+            try:
+                story = generate_story(
+                    persona=persona,
+                    revenue_change=revenue_change,
+                    worst_region=worst_region,
+                    worst_change=worst_change,
+                    negative_reviews_count=negative_count,
+                )
 
-        st.markdown(f"### AI Analysis for {persona}")
-        st.info(story)
+                st.markdown(f"### AI Analysis for {persona}")
+                st.info(story)
+
+            except Exception as e:
+                st.warning(
+                    "Gemini AI is currently unavailable. Showing analytics only."
+                )
+                st.caption(str(e))
 
     # -----------------------------------------------------
     # AI ACTION RECOMMENDATIONS
