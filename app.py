@@ -10,6 +10,9 @@ from analytics.confidence import calculate_confidence
 from ai.sentiment import analyze_reviews
 
 from ai.storyteller import generate_story
+
+from ai.recommendations import generate_recommendations
+
 # ---------------------------------------------------------
 # PAGE CONFIG
 # ---------------------------------------------------------
@@ -370,59 +373,64 @@ try:
     # -----------------------------------------------------
 
     st.divider()
-
-    st.subheader("AI Executive Insight")
+    st.subheader("🤖 AI Executive Insight")
 
     negative_count = len(
         reviews[reviews["sentiment"] == "Negative"]
     )
 
-    confidence_score, confidence_components = calculate_confidence(
-    sales=sales,
-    daily_revenue=daily_revenue,
-    anomaly_data=anomaly_data,
-    root_causes=root_causes,
-    negative_reviews_count=negative_count,
+    anomaly_count = len(anomalies)
+
+    # Generate recommendation data
+    recommendations = generate_recommendations(
+        revenue_change=revenue_change,
+        worst_region=worst_region,
+        worst_change=worst_change,
+        negative_reviews_count=negative_count,
+        anomaly_count=anomaly_count,
     )
-    
+
+    # Calculate confidence
+    confidence_score, confidence_components = calculate_confidence(
+        sales=sales,
+        daily_revenue=daily_revenue,
+        anomaly_data=anomaly_data,
+        root_causes=root_causes,
+        negative_reviews_count=negative_count,
+    )
+
+    # -----------------------------------------------------
+    # INSIGHT CONFIDENCE
+    # -----------------------------------------------------
+
     st.divider()
-    
     st.subheader("🎯 Insight Confidence")
-    
-    confidence_col1, confidence_col2 = st.columns(
-            [1, 2]
-            )
-        
+
+    confidence_col1, confidence_col2 = st.columns([1, 2])
+
     with confidence_col1:
-        
-                st.metric(
-                    "Confidence Score",
-                    f"{confidence_score}%"
-                )
-        
+        st.metric(
+            "Confidence Score",
+            f"{confidence_score}%"
+        )
+
     with confidence_col2:
-        
         st.write(
-                    "Confidence is calculated from data freshness, "
-                    "data completeness, statistical strength, "
-                    "and supporting evidence."
-                )
-        
-    st.progress(
-            confidence_score / 100
-            )
+            "Confidence is calculated from data freshness, "
+            "data completeness, statistical strength, "
+            "and supporting evidence."
+        )
 
-# CONFIDENCE BREAKDOWN
+    st.progress(confidence_score / 100)
 
-    
+    # Confidence Breakdown
+
     st.write("### Confidence Breakdown")
 
-    confidence_table = pd.DataFrame(
-        {
-            "Factor": confidence_components.keys(),
-            "Score": confidence_components.values(),
-        }
-    )
+    confidence_table = pd.DataFrame({
+        "Factor": list(confidence_components.keys()),
+        "Score": list(confidence_components.values()),
+    })
 
     st.dataframe(
         confidence_table,
@@ -431,40 +439,64 @@ try:
     )
 
     if confidence_score >= 80:
-
         st.success(
-            "High confidence: the insight is supported "
-            "by strong and sufficiently complete evidence."
+            "High confidence: the insight is supported by strong and sufficiently complete evidence."
         )
-
     elif confidence_score >= 60:
-
         st.warning(
-            "Medium confidence: the insight is useful, "
-            "but additional evidence should be reviewed."
+            "Medium confidence: the insight is useful, but additional evidence should be reviewed."
         )
-
     else:
-
         st.error(
-            "Low confidence: insufficient evidence is "
-            "available to make a reliable conclusion."
+            "Low confidence: insufficient evidence is available to make a reliable conclusion."
         )
-    
+
+    # -----------------------------------------------------
+    # GENERATE AI INSIGHT
+    # -----------------------------------------------------
 
     if st.button("Generate AI Insight"):
 
         with st.spinner("Analyzing business performance..."):
 
-                story = generate_story(
-        persona=persona,
-        revenue_change=revenue_change,
-        worst_region=worst_region,
-        worst_change=worst_change,
-        negative_reviews_count=negative_count,
-    )
+            story = generate_story(
+                persona=persona,
+                revenue_change=revenue_change,
+                worst_region=worst_region,
+                worst_change=worst_change,
+                negative_reviews_count=negative_count,
+            )
+
         st.markdown(f"### AI Analysis for {persona}")
-        st.info(story)    
+        st.info(story)
+
+    # -----------------------------------------------------
+    # AI ACTION RECOMMENDATIONS
+    # -----------------------------------------------------
+
+    st.divider()
+    st.subheader("🚀 AI Action Recommendations")
+
+    for rec in recommendations:
+
+        with st.container(border=True):
+
+            st.markdown(
+                f"## {rec['priority']} — {rec['title']}"
+            )
+
+            col1, col2 = st.columns(2)
+
+            col1.metric("Impact", rec["impact"])
+            col2.metric("Effort", rec["effort"])
+
+            st.write(f"**Owner:** {rec['owner']}")
+
+            st.write("**Evidence:**")
+
+            for item in rec["evidence"]:
+                st.write(f"• {item}")
+
 
 
 except Exception as e:
