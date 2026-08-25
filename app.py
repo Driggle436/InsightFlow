@@ -8,7 +8,7 @@ from analytics.contribution import find_root_causes
 
 from ai.sentiment import analyze_reviews
 
-
+from ai.storyteller import generate_story
 # ---------------------------------------------------------
 # PAGE CONFIG
 # ---------------------------------------------------------
@@ -357,6 +357,31 @@ try:
                 use_container_width=True,
                 hide_index=True,
             )
+
+    # -----------------------------------------------------
+    # AI STORYTELLER
+    # -----------------------------------------------------
+
+    st.divider()
+
+    st.subheader("AI Executive Insight")
+
+    negative_count = len(
+        reviews[reviews["sentiment"] == "Negative"]
+    )
+
+    if st.button("Generate AI Insight"):
+
+        with st.spinner("Analyzing business performance..."):
+
+            story = generate_story(
+                revenue_change=revenue_change,
+                worst_region=worst_region,
+                worst_change=worst_change,
+                negative_reviews_count=negative_count,
+            )
+
+        st.info(story)    
 
 
 except Exception as e:
