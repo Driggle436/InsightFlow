@@ -617,6 +617,8 @@ try:
         key="feedback_rating_final",
     )
 
+    MAX_FEEDBACK_LENGTH = 1000
+
     feedback_text = st.text_area(
         "Correction / additional business context",
         placeholder=(
@@ -625,6 +627,14 @@ try:
         ),
         key="feedback_text_final",
     )
+
+    # Remove extra whitespace
+    feedback_text = " ".join(feedback_text.split())
+
+    # Limit length
+    if len(feedback_text) > MAX_FEEDBACK_LENGTH:
+        st.error("Feedback cannot exceed 1000 characters.")
+        st.stop()
 
     if st.button(
         "💾 Submit Feedback",
@@ -636,6 +646,10 @@ try:
             "generated_story",
             "No AI insight stored."
         )
+        # Validate feedback before saving
+        if not feedback_text.strip():
+            st.warning("Please enter a correction or business context before submitting.")
+            st.stop()
 
         try:
 
