@@ -26,7 +26,16 @@ def generate_story(
     worst_region,
     worst_change,
     negative_reviews_count,
+    regional_evidence,
+    review_evidence,
 ):
+    regional_context = regional_evidence.to_string(
+    index=False
+    )
+
+    customer_voice = review_evidence.to_string(
+        index=False
+    )
 
     if persona == "CEO":
 
@@ -46,29 +55,49 @@ def generate_story(
         """
 
     prompt = f"""
-You are an AI business analyst.
+You are an enterprise business intelligence analyst.
 
-Role:
+Persona:
 {persona}
 
-Instructions:
-{role_instruction}
+MAIN KPI SIGNAL
+Revenue change: {revenue_change:.1f}%
 
-Verified data:
+WORST REGION
+Region: {worst_region}
+Revenue change: {worst_change:.1f}%
 
-Revenue change:
-{revenue_change:.1f}%
+NEGATIVE CUSTOMER REVIEWS
+Count: {negative_reviews_count}
 
-Worst region:
-{worst_region}
+REGIONAL BUSINESS CONTEXT
+{regional_context}
 
-Regional decline:
-{worst_change:.1f}%
+CUSTOMER VOICE BY PRODUCT
+{customer_voice}
 
-Negative reviews:
-{negative_reviews_count}
+TASK
 
-Keep the response under 120 words.
+Explain what is happening from the perspective of the
+selected persona.
+
+Use ONLY the evidence provided above.
+
+Connect revenue performance with CRM churn and
+customer-review evidence where appropriate.
+
+Do not invent numbers, causes, or business facts.
+
+If the evidence is insufficient or contradictory,
+explicitly say that the evidence is insufficient.
+
+Provide:
+
+1. What happened
+2. Most likely drivers
+3. Supporting evidence
+4. Business implication
+5. Recommended next step
 """
 
     response = client.models.generate_content(

@@ -6,7 +6,7 @@ from config import get_connection
 from analytics.anomaly import detect_anomalies
 from analytics.contribution import find_root_causes
 from analytics.confidence import calculate_confidence
-
+from analytics.evidence import build_unified_evidence
 from ai.sentiment import analyze_reviews
 
 from ai.storyteller import generate_story
@@ -97,6 +97,29 @@ def load_reviews():
     return reviews
 
 
+@st.cache_data
+def load_crm():
+
+    connection = get_connection()
+
+    query = """
+        SELECT
+            customer_id,
+            region,
+            churn,
+            signup_date
+        FROM crm_customers
+    """
+
+    crm = pd.read_sql(
+        query,
+        connection
+    )
+
+    connection.close()
+
+    return crm
+
 # ---------------------------------------------------------
 # HEADER
 # ---------------------------------------------------------
@@ -129,6 +152,7 @@ try:
     # -----------------------------------------------------
 
     sales = load_sales()
+    crm = load_crm()
 
     # -----------------------------------------------------
     # FILTERS
@@ -396,6 +420,20 @@ try:
 
         reviews = analyze_reviews(reviews)
 
+        # -----------------------------------------------------
+        # UNIFIED BUSINESS EVIDENCE
+        # -----------------------------------------------------
+
+        (
+            regional_evidence,
+            review_evidence,
+            business_summary,
+        ) = build_unified_evidence(
+            sales=sales,
+            crm=crm,
+            reviews=reviews,
+        )
+
         sentiment_counts = (
             reviews["sentiment"]
             .value_counts()
@@ -437,6 +475,81 @@ try:
                 use_container_width=True,
                 hide_index=True,
             )
+
+    # -----------------------------------------------------
+    # UNIFIED BUSINESS EVIDENCE
+    # -----------------------------------------------------
+
+    st.divider()
+
+    st.subheader("🔗 Unified Business Evidence")
+
+    st.caption(
+        "Sales, CRM, and customer-review data reconciled "
+        "into a unified business context."
+    )
+
+    # -----------------------------------------------------
+    # REGIONAL BUSINESS CONTEXT
+    # -----------------------------------------------------
+
+    st.write("### Regional Business Context")
+
+    regional_display = regional_evidence.copy()
+
+    regional_display["revenue"] = (
+        regional_display["revenue"].round(0)
+    )
+
+    regional_display["churn_rate"] = (
+        regional_display["churn_rate"].round(1)
+    )
+
+    regional_display = regional_display.rename(
+        columns={
+            "region": "Region",
+            "revenue": "Revenue",
+            "orders": "Orders",
+            "marketing_spend": "Marketing Spend",
+            "customers": "Customers",
+            "churned_customers": "Churned Customers",
+            "churn_rate": "Churn Rate %",
+        }
+    )
+
+    st.dataframe(
+        regional_display,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    # -----------------------------------------------------
+    # CUSTOMER VOICE BY PRODUCT
+    # -----------------------------------------------------
+
+    st.write("### Customer Voice by Product")
+
+    review_display = review_evidence.copy()
+
+    review_display["average_rating"] = (
+        review_display["average_rating"].round(1)
+    )
+
+    review_display = review_display.rename(
+        columns={
+            "product": "Product",
+            "review_count": "Reviews",
+            "average_rating": "Average Rating",
+            "negative_reviews": "Negative Reviews",
+        }
+    )
+
+    st.dataframe(
+        review_display,
+        use_container_width=True,
+        hide_index=True,
+    )
+
 
     # -----------------------------------------------------
     # AI STORYTELLER
@@ -522,30 +635,126 @@ try:
         )
 
     # -----------------------------------------------------
-    # GENERATE AI INSIGHT
+    # AI INSIGHT WITH UNCERTAINTY / ABSTENTION
     # -----------------------------------------------------
 
     if st.button("Generate AI Insight"):
 
-        with st.spinner("Analyzing business performance..."):
+        # -------------------------------------------------
+        # HIGH CONFIDENCE
+        # -------------------------------------------------
 
-            try:
-                story = generate_story(
-                    persona=persona,
-                    revenue_change=revenue_change,
-                    worst_region=worst_region,
-                    worst_change=worst_change,
-                    negative_reviews_count=negative_count,
-                )
+        if confidence_score >= 80:
 
-                st.markdown(f"### AI Analysis for {persona}")
-                st.info(story)
+            with st.spinner("Analyzing business performance..."):
 
-            except Exception as e:
-                st.warning(
-                    "Gemini AI is currently unavailable. Showing analytics only."
-                )
-                st.caption(str(e))
+                try:
+
+                    story = generate_story(
+                        persona=persona,
+                        revenue_change=revenue_change,
+                        worst_region=worst_region,
+                        worst_change=worst_change,
+                        negative_reviews_count=negative_count,
+                        regional_evidence=regional_evidence,
+                        review_evidence=review_evidence,
+                    )
+
+                    st.markdown(
+                        f"### 🟢 AI Analysis for {persona}"
+                    )
+
+                    st.info(story)
+
+                    st.caption(
+                        f"Evidence confidence: {confidence_score}%"
+                    )
+
+                except Exception as e:
+
+                    st.warning(
+                        "Gemini AI is currently unavailable. "
+                        "Showing analytics only."
+                    )
+
+                    st.caption(str(e))
+
+        # -------------------------------------------------
+        # MEDIUM CONFIDENCE
+        # -------------------------------------------------
+
+        elif confidence_score >= 60:
+
+            st.warning(
+                f"⚠️ Moderate confidence ({confidence_score}%). "
+                "The following insight should be treated cautiously."
+            )
+
+            with st.spinner("Generating cautious analysis..."):
+
+                try:
+
+                    story = generate_story(
+                        persona=persona,
+                        revenue_change=revenue_change,
+                        worst_region=worst_region,
+                        worst_change=worst_change,
+                        negative_reviews_count=negative_count,
+                        regional_evidence=regional_evidence,
+                        review_evidence=review_evidence,
+                    )
+
+                    st.markdown(
+                        f"### 🟡 Cautious AI Analysis for {persona}"
+                    )
+
+                    st.info(story)
+
+                    st.caption(
+                        "This insight is based on moderate evidence "
+                        "and should be validated before making major decisions."
+                    )
+
+                except Exception as e:
+
+                    st.warning(
+                        "Gemini AI is currently unavailable."
+                    )
+
+                    st.caption(str(e))
+
+        # -------------------------------------------------
+        # LOW CONFIDENCE → ABSTAIN
+        # -------------------------------------------------
+
+        else:
+
+            st.error(
+                f"🔴 InsightFlow is abstaining from AI analysis "
+                f"because evidence confidence is only "
+                f"{confidence_score}%."
+            )
+
+            st.write(
+                "There is insufficient evidence to generate "
+                "a reliable business conclusion."
+            )
+
+            st.write("### Why InsightFlow Abstained")
+
+            for factor, score in confidence_components.items():
+
+                if score < 60:
+
+                    st.write(
+                        f"• **{factor}**: {score}%"
+                    )
+
+            st.info(
+                "Recommended action: collect additional data, "
+                "verify the underlying KPI movement, and retry "
+                "the analysis."
+            )
 
     # -----------------------------------------------------
     # AI ACTION RECOMMENDATIONS

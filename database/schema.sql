@@ -30,3 +30,12 @@ CREATE TABLE customer_reviews (
     rating INT NOT NULL,
     review_text TEXT NOT NULL
 );
+
+CREATE TABLE insight_feedback (
+    feedback_id INT PRIMARY KEY AUTO_INCREMENT,
+    insight_text TEXT,
+    persona VARCHAR(50),
+    rating VARCHAR(20),
+    correction TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
