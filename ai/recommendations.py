@@ -7,7 +7,6 @@ def generate_recommendations(
 ):
     recommendations = []
 
-    # Priority 1
     if worst_change < -5:
         recommendations.append({
             "priority": "P1",
@@ -15,13 +14,13 @@ def generate_recommendations(
             "impact": "High",
             "effort": "Medium",
             "owner": "Regional Sales Manager",
+            "confidence": "High",
             "evidence": [
                 f"{worst_region} declined {worst_change:.1f}%",
-                "Revenue trend shows deterioration."
-            ]
+                "Revenue trend shows deterioration.",
+            ],
         })
 
-    # Priority 2
     if negative_reviews_count >= 2:
         recommendations.append({
             "priority": "P2",
@@ -29,12 +28,12 @@ def generate_recommendations(
             "impact": "Medium",
             "effort": "Low",
             "owner": "Customer Support",
+            "confidence": "Medium",
             "evidence": [
-                f"{negative_reviews_count} negative reviews detected."
-            ]
+                f"{negative_reviews_count} negative reviews detected.",
+            ],
         })
 
-    # Priority 3
     if anomaly_count > 0:
         recommendations.append({
             "priority": "P3",
@@ -42,9 +41,10 @@ def generate_recommendations(
             "impact": "Medium",
             "effort": "Low",
             "owner": "Business Analyst",
+            "confidence": "Medium",
             "evidence": [
-                f"{anomaly_count} revenue anomalies detected."
-            ]
+                f"{anomaly_count} revenue anomalies detected.",
+            ],
         })
 
     return recommendations

@@ -1,679 +1,128 @@
-import pandas as pd
+import plotly.express as px
 import streamlit as st
 
-from config import get_connection
-
-from analytics.anomaly import detect_anomalies
-from analytics.contribution import find_root_causes
-from analytics.confidence import calculate_confidence
-from analytics.feedback import save_feedback
-from ai.sentiment import analyze_reviews
-
 from ai.storyteller import generate_story
+from components.action_cards import render_action_cards
+from components.bento_layout import render_bento_shell
+from components.confidence_panel import render_abstention_banner, render_confidence_gauge
+from components.evidence_panel import render_driver_ranking
+from components.html_render import render_html
+from components.kpi_cards import render_alert_strip, render_kpi_grid
+from components.layout import render_hero, render_section_header
+from utils.bootstrap import chart_layout, load_context, setup_page
 
-from ai.recommendations import generate_recommendations
-
-if "generated_story" not in st.session_state:
-    st.session_state.generated_story = None
-
-# ---------------------------------------------------------
-# PAGE CONFIG
-# ---------------------------------------------------------
-
-st.set_page_config(
-    page_title="InsightFlow AI",
-    page_icon="📊",
-    layout="wide",
-)
-
-
-# ---------------------------------------------------------
-# KPI CALCULATION
-# ---------------------------------------------------------
-
-def calculate_kpi_change(daily_data):
-    daily_data = daily_data.sort_values("date")
-
-    if len(daily_data) < 20:
-        return 0
-
-    previous_period = daily_data.iloc[-20:-10]["revenue"].mean()
-    current_period = daily_data.iloc[-10:]["revenue"].mean()
-
-    if previous_period == 0:
-        return 0
-
-    change = (
-        (current_period - previous_period)
-        / previous_period
-    ) * 100
-
-    return change
-
-
-# ---------------------------------------------------------
-# LOAD SALES
-# ---------------------------------------------------------
-
-@st.cache_data
-def load_sales():
-
-    connection = get_connection()
-
-    query = """
-        SELECT
-            date,
-            region,
-            product,
-            orders,
-            revenue,
-            marketing_spend
-        FROM sales_transactions
-        ORDER BY date
-    """
-
-    df = pd.read_sql(query, connection)
-
-    connection.close()
-
-    return df
-
-
-# ---------------------------------------------------------
-# LOAD REVIEWS
-# ---------------------------------------------------------
-
-@st.cache_data
-def load_reviews():
-
-    connection = get_connection()
-
-    query = """
-        SELECT *
-        FROM customer_reviews
-    """
-
-    reviews = pd.read_sql(query, connection)
-
-    connection.close()
-
-    return reviews
-
-
-# ---------------------------------------------------------
-# HEADER
-# ---------------------------------------------------------
-
-st.title("📊 InsightFlow AI")
-
-st.caption(
-    "AI-powered business intelligence and decision support"
-)
-
-st.sidebar.title("InsightFlow Controls")
-
-persona = st.sidebar.selectbox(
-    "Choose your role",
-    ["CEO", "Sales Manager"]
-)
-
-st.sidebar.divider()
-
-st.sidebar.subheader("Dashboard Filters")
-
-# ---------------------------------------------------------
-# MAIN APPLICATION
-# ---------------------------------------------------------
+setup_page("Overview", "🏠")
 
 try:
-
-    # -----------------------------------------------------
-    # LOAD DATA
-    # -----------------------------------------------------
-
-    sales = load_sales()
-
-    # -----------------------------------------------------
-    # FILTERS
-    # -----------------------------------------------------
-
-    sales["date"] = pd.to_datetime(sales["date"])
-
-    min_date = sales["date"].min()
-    max_date = sales["date"].max()
-
-    date_range = st.sidebar.date_input(
-        "Date Range",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date,
-    )
-
-    regions = ["All"] + sorted(sales["region"].unique().tolist())
-    selected_region = st.sidebar.selectbox(
-        "Region",
-        regions,
-    )
-
-    products = ["All"] + sorted(sales["product"].unique().tolist())
-    selected_product = st.sidebar.selectbox(
-        "Product",
-        products,
-    )
-
-    filtered_sales = sales.copy()
-
-    # Date filter
-    if len(date_range) == 2:
-        start_date, end_date = date_range
-
-        filtered_sales = filtered_sales[
-            (filtered_sales["date"] >= pd.Timestamp(start_date))
-            &
-            (filtered_sales["date"] <= pd.Timestamp(end_date))
-        ]
-
-    # Region filter
-    if selected_region != "All":
-        filtered_sales = filtered_sales[
-            filtered_sales["region"] == selected_region
-        ]
-
-    # Product filter
-    if selected_product != "All":
-        filtered_sales = filtered_sales[
-            filtered_sales["product"] == selected_product
-        ]
-
-    sales = filtered_sales
-
-    if sales.empty:
-        st.warning("No data matches the selected filters.")
-        st.stop()
-
-
-    # -----------------------------------------------------
-    # BASIC KPIs
-    # -----------------------------------------------------
-
-    total_revenue = sales["revenue"].sum()
-
-    total_orders = sales["orders"].sum()
-
-    average_order_value = (
-        total_revenue / total_orders
-        if total_orders > 0
-        else 0
-    )
-
-
-    # -----------------------------------------------------
-    # DAILY REVENUE
-    # -----------------------------------------------------
-
-    daily_revenue = (
-        sales
-        .groupby("date")["revenue"]
-        .sum()
-        .reset_index()
-    )
-
-    revenue_change = calculate_kpi_change(
-        daily_revenue
-    )
-
-
-    # -----------------------------------------------------
-    # KPI CARDS
-    # -----------------------------------------------------
-    st.caption(
-    f"Showing: **{selected_region}** | **{selected_product}**"
-    )
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric(
-        "Total Revenue",
-        f"₹{total_revenue:,.0f}",
-        f"{revenue_change:+.1f}%"
-    )
-
-    col2.metric(
-        "Total Orders",
-        f"{total_orders:,}"
-    )
-
-    col3.metric(
-        "Average Order Value",
-        f"₹{average_order_value:,.0f}"
-    )
-
-
-    st.divider()
-
-
-    # -----------------------------------------------------
-    # REVENUE TREND
-    # -----------------------------------------------------
-
-    st.subheader("Revenue Trend")
-
-    st.line_chart(
-        daily_revenue.set_index("date")
-    )
-
-
-    # -----------------------------------------------------
-    # REVENUE BY REGION
-    # -----------------------------------------------------
-
-    st.subheader("Revenue by Region")
-
-    region_revenue = (
-        sales
-        .groupby("region")["revenue"]
-        .sum()
-        .sort_values(ascending=False)
-    )
-
-    st.bar_chart(region_revenue)
-
-
-    # -----------------------------------------------------
-    # ANOMALY DETECTION
-    # -----------------------------------------------------
-
-    st.subheader("Detected Anomalies")
-
-    anomaly_data = detect_anomalies(
-        daily_revenue,
-        "revenue",
-    )
-
-    anomalies = anomaly_data[
-        anomaly_data["is_anomaly"]
-    ].copy()
-
-    anomalies["status"] = "🔴 Anomaly Detected"
-
-    anomalies = anomalies[
-        ["date", "revenue", "status"]
-    ]
-
-    if anomalies.empty:
-
-        st.success(
-            "No significant revenue anomalies detected."
-        )
-
-    else:
-
-        st.dataframe(
-            anomalies,
-            use_container_width=True,
-            hide_index=True,
-        )
-
-
-    # -----------------------------------------------------
-    # ROOT CAUSE ANALYSIS
-    # -----------------------------------------------------
-
-    st.subheader("Root Cause Analysis")
-
-    root_causes = find_root_causes(sales)
-
-    display_causes = root_causes.reset_index()
-
-    display_causes = display_causes.rename(
-    columns={
-        "region": "Region",
-        "previous": "Previous Revenue",
-        "current": "Current Revenue",
-        "change": "Revenue Change",
-        "percent_change": "Change %",
-    }
-    )
-
-    display_causes["Previous Revenue"] = (
-        display_causes["Previous Revenue"]
-        .round(0)
-    )
-
-    display_causes["Current Revenue"] = (
-        display_causes["Current Revenue"]
-        .round(0)
-    )
-
-    display_causes["Revenue Change"] = (
-        display_causes["Revenue Change"]
-        .round(0)
-    )
-
-    display_causes["Change %"] = (
-        display_causes["Change %"]
-        .round(1)
-    )
-
-    display_causes = display_causes[
-    [
-        "Region",
-        "Previous Revenue",
-        "Current Revenue",
-        "Revenue Change",
-        "Change %",
-    ]
-]
-
-    st.dataframe(
-        display_causes,
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    worst_region = root_causes.index[0]
-
-    worst_change = root_causes.iloc[0]["percent_change"]
-
-    st.warning(
-        f"Biggest revenue decline occurred in "
-        f"**{worst_region}** "
-        f"({worst_change:.1f}%)."
-    )
-
-
-    # -----------------------------------------------------
-    # CUSTOMER SENTIMENT
-    # -----------------------------------------------------
-
-    st.subheader("Customer Sentiment")
-
-    reviews = load_reviews()
-
-    if reviews.empty:
-
-        st.info(
-            "No customer reviews found."
-        )
-
-    else:
-
-        reviews = analyze_reviews(reviews)
-
-        sentiment_counts = (
-            reviews["sentiment"]
-            .value_counts()
-        )
-
-        st.bar_chart(
-            sentiment_counts
-        )
-
-
-        # -------------------------------------------------
-        # NEGATIVE REVIEWS
-        # -------------------------------------------------
-
-        st.write(
-            "Recent Negative Reviews"
-        )
-
-        negative_reviews = reviews[
-            reviews["sentiment"] == "Negative"
-        ]
-
-        if negative_reviews.empty:
-
-            st.success(
-                "No negative reviews found."
-            )
-
-        else:
-
-            st.dataframe(
-                negative_reviews[
-                    [
-                        "product",
-                        "rating",
-                        "review_text"
-                    ]
-                ],
-                use_container_width=True,
-                hide_index=True,
-            )
-
-    # -----------------------------------------------------
-    # AI STORYTELLER
-    # -----------------------------------------------------
-
-    st.divider()
-    st.subheader("🤖 AI Executive Insight")
-
-    if reviews.empty or "sentiment" not in reviews.columns:
-
-        negative_count = 0
-
-    else:
-
-        negative_count = len(
-            reviews[
-                reviews["sentiment"] == "Negative"
-            ]
-        )
-
-    anomaly_count = len(anomalies)
-
-    # Generate recommendation data
-    recommendations = generate_recommendations(
-        revenue_change=revenue_change,
-        worst_region=worst_region,
-        worst_change=worst_change,
-        negative_reviews_count=negative_count,
-        anomaly_count=anomaly_count,
-    )
-
-    # Calculate confidence
-    confidence_score, confidence_components = calculate_confidence(
-        sales=sales,
-        daily_revenue=daily_revenue,
-        anomaly_data=anomaly_data,
-        root_causes=root_causes,
-        negative_reviews_count=negative_count,
-    )
-
-    # -----------------------------------------------------
-    # INSIGHT CONFIDENCE
-    # -----------------------------------------------------
-
-    st.divider()
-    st.subheader("🎯 Insight Confidence")
-
-    confidence_col1, confidence_col2 = st.columns([1, 2])
-
-    with confidence_col1:
-        st.metric(
-            "Confidence Score",
-            f"{confidence_score}%"
-        )
-
-    with confidence_col2:
-        st.write(
-            "Confidence is calculated from data freshness, "
-            "data completeness, statistical strength, "
-            "and supporting evidence."
-        )
-
-    st.progress(confidence_score / 100)
-
-    # Confidence Breakdown
-
-    st.write("### Confidence Breakdown")
-
-    confidence_table = pd.DataFrame({
-        "Factor": list(confidence_components.keys()),
-        "Score": list(confidence_components.values()),
+  ctx = load_context()
+  persona = ctx["persona"]
+  analysis = ctx["analysis"]
+
+  render_bento_shell()
+  render_hero(
+    "Business Overview",
+    f"What matters right now for {persona} — movements, drivers, and next steps.",
+    badge="InsightFlow",
+  )
+
+  alerts = []
+  if analysis["revenue_change"] < -3:
+    alerts.append({
+      "severity": "critical",
+      "title": f"Revenue down {abs(analysis['revenue_change']):.1f}%",
+      "detail": f"Biggest impact in {analysis['worst_region']} ({analysis['worst_change']:.1f}%)",
+    })
+  if analysis["negative_count"] >= 2:
+    alerts.append({
+      "severity": "warning",
+      "title": f"{analysis['negative_count']} unhappy customers",
+      "detail": "Delivery and service complaints in recent reviews",
+    })
+  if analysis["anomaly_count"] > 0:
+    alerts.append({
+      "severity": "info",
+      "title": "Unusual revenue days",
+      "detail": f"{analysis['anomaly_count']} days outside the normal pattern",
+    })
+  sparse_kpis = [k for k in analysis["kpis"] if k.get("sparse")]
+  if sparse_kpis:
+    alerts.append({
+      "severity": "info",
+      "title": "New product data is limited",
+      "detail": f"{sparse_kpis[0]['name']} — only {sparse_kpis[0].get('history_days', '?')} days of history",
     })
 
-    st.dataframe(
-        confidence_table,
-        use_container_width=True,
-        hide_index=True,
+  if alerts:
+    render_alert_strip(alerts)
+
+  render_section_header("Performance snapshot")
+  render_kpi_grid(analysis["kpis"])
+
+  chart_col, conf_col = st.columns([1.55, 1])
+
+  with chart_col:
+    render_section_header("Revenue trend")
+    fig = px.area(
+      analysis["daily_revenue"],
+      x="date",
+      y="revenue",
+      color_discrete_sequence=["#60A5FA"],
     )
+    chart_layout(fig)
+    if analysis["anomaly_count"] > 0:
+      fig.add_scatter(
+        x=analysis["anomalies"]["date"],
+        y=analysis["anomalies"]["revenue"],
+        mode="markers",
+        marker=dict(color="#F87171", size=9, symbol="circle"),
+        name="Unusual",
+      )
+    st.plotly_chart(fig, use_container_width=True)
 
-    if confidence_score >= 80:
-        st.success(
-            "High confidence: the insight is supported by strong and sufficiently complete evidence."
+  with conf_col:
+    render_section_header("How sure are we?")
+    render_confidence_gauge(analysis["confidence_score"], analysis["confidence_components"])
+    if analysis["confidence_score"] < 60:
+      render_abstention_banner(
+        "We're not confident enough to recommend strong action yet.",
+        [
+          "Confirm if a campaign or event affected the region",
+          "Refresh customer data for the affected area",
+          "Ask an analyst to validate before escalating",
+        ],
+      )
+
+  left, right = st.columns(2)
+
+  with left:
+    render_section_header("What's driving the change")
+    render_driver_ranking(analysis["drivers"][:3])
+
+  with right:
+    render_section_header("Recommended next steps")
+    render_action_cards(analysis["recommendations"][:2], persona)
+
+  render_section_header("Executive summary")
+
+  if st.button("Generate insight narrative", type="primary"):
+    with st.spinner("Preparing your summary..."):
+      try:
+        story = generate_story(
+          persona=persona,
+          revenue_change=analysis["revenue_change"],
+          worst_region=analysis["worst_region"],
+          worst_change=analysis["worst_change"],
+          negative_reviews_count=analysis["negative_count"],
+          regional_evidence=analysis["root_causes"],
+          review_evidence=analysis["negative_reviews"],
         )
-    elif confidence_score >= 60:
-        st.warning(
-            "Medium confidence: the insight is useful, but additional evidence should be reviewed."
-        )
-    else:
-        st.error(
-            "Low confidence: insufficient evidence is available to make a reliable conclusion."
-        )
+        st.session_state.generated_story = story
+      except Exception:
+        st.warning("Summary unavailable right now. Review the drivers and actions above.")
 
-    # -----------------------------------------------------
-    # GENERATE AI INSIGHT
-    # -----------------------------------------------------
-
-    if st.button("Generate AI Insight"):
-
-        with st.spinner("Analyzing business performance..."):
-
-            try:
-
-                story = generate_story(
-                    persona=persona,
-                    revenue_change=revenue_change,
-                    worst_region=worst_region,
-                    worst_change=worst_change,
-                    negative_reviews_count=negative_count,
-                    regional_evidence=root_causes,
-                    review_evidence=negative_reviews,
-                )
-
-                st.session_state.generated_story = story
-
-                st.markdown(
-                    f"### AI Analysis for {persona}"
-                )
-
-                st.info(story)
-
-            except Exception as e:
-
-                st.warning(
-                    "Gemini AI is currently unavailable. "
-                    "Showing analytics only."
-                )
-
-                st.caption(str(e))
-
-    # -----------------------------------------------------
-    # AI ACTION RECOMMENDATIONS
-    # -----------------------------------------------------
-
-    st.divider()
-    st.subheader("🚀 AI Action Recommendations")
-
-    for rec in recommendations:
-
-        with st.container(border=True):
-
-            st.markdown(
-                f"## {rec['priority']} — {rec['title']}"
-            )
-
-            col1, col2 = st.columns(2)
-
-            col1.metric("Impact", rec["impact"])
-            col2.metric("Effort", rec["effort"])
-
-            st.write(f"**Owner:** {rec['owner']}")
-
-            st.write("**Evidence:**")
-
-            for item in rec["evidence"]:
-                st.write(f"• {item}")
-
-
-    # =====================================================
-    # ANALYST FEEDBACK
-    # =====================================================
-
-    st.divider()
-
-    st.subheader("📝 Analyst Feedback")
-
-    st.write(
-        "Help InsightFlow improve its AI-generated "
-        "business insights."
-    )
-
-    feedback_rating = st.radio(
-        "Was the AI insight useful?",
-        ["Helpful", "Not Helpful"],
-        horizontal=True,
-        key="feedback_rating_final",
-    )
-
-    MAX_FEEDBACK_LENGTH = 1000
-
-    feedback_text = st.text_area(
-        "Correction / additional business context",
-        placeholder=(
-            "Example: The East revenue decline was mainly "
-            "caused by delivery delays."
-        ),
-        key="feedback_text_final",
-    )
-
-    # Remove extra whitespace
-    feedback_text = " ".join(feedback_text.split())
-
-    # Limit length
-    if len(feedback_text) > MAX_FEEDBACK_LENGTH:
-        st.error("Feedback cannot exceed 1000 characters.")
-        st.stop()
-
-    if st.button(
-        "💾 Submit Feedback",
-        key="submit_feedback_final",
-    ):
-
-        # Only create insight_text AFTER the button is clicked
-        insight_text = st.session_state.get(
-            "generated_story",
-            "No AI insight stored."
-        )
-        # Validate feedback before saving
-        if not feedback_text.strip():
-            st.warning("Please enter a correction or business context before submitting.")
-            st.stop()
-
-        try:
-
-            save_feedback(
-                persona=persona,
-                insight_text=insight_text,
-                rating=feedback_rating,
-                correction=feedback_text,
-                confidence_score=int(confidence_score),
-            )
-
-            st.success(
-                "✅ Feedback saved successfully!"
-            )
-
-        except Exception as feedback_error:
-
-            st.error(
-                f"Unable to save feedback: {feedback_error}"
-            )
-
+  if st.session_state.get("generated_story"):
+    render_html(f'<div class="if-insight-card"><strong>For {persona}</strong></div>')
+    st.markdown(st.session_state.generated_story)
 
 except Exception as e:
-
-    st.error(
-        f"Unable to load dashboard data: {e}"
-    )
+  st.error(f"Unable to load overview: {e}")

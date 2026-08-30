@@ -9,6 +9,12 @@ def detect_anomalies(
 
     result = daily_data.copy()
 
+    # Handle empty data - need at least 1 sample for IsolationForest
+    if len(result) < 2:
+        result["anomaly"] = 1  # Mark as non-anomalous
+        result["is_anomaly"] = False
+        return result
+
     model = IsolationForest(
         contamination=0.10,
         random_state=42,

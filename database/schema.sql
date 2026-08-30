@@ -5,6 +5,7 @@ USE insightflow_ai;
 DROP TABLE IF EXISTS customer_reviews;
 DROP TABLE IF EXISTS crm_customers;
 DROP TABLE IF EXISTS sales_transactions;
+DROP TABLE IF EXISTS insight_feedback;
 
 CREATE TABLE sales_transactions (
     transaction_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -37,5 +38,6 @@ CREATE TABLE insight_feedback (
     persona VARCHAR(50),
     rating VARCHAR(20),
     correction TEXT,
+    confidence_score INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

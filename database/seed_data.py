@@ -31,6 +31,10 @@ def generate_sales_data():
     connection = get_connection()
     cursor = connection.cursor()
 
+    # Clear existing data
+    cursor.execute("DELETE FROM sales_transactions")
+    connection.commit()
+
     start_date = date.today() - timedelta(days=59)
 
     rows = []
@@ -104,6 +108,10 @@ def generate_reviews():
     connection = get_connection()
     cursor = connection.cursor()
 
+    # Clear existing data
+    cursor.execute("DELETE FROM customer_reviews")
+    connection.commit()
+
     reviews = [
         ("Laptop", 5, "Excellent performance and fast delivery."),
         ("Laptop", 2, "Delivery was delayed."),
@@ -136,6 +144,50 @@ def generate_reviews():
     cursor.close()
     connection.close()
 
+def generate_crm_data():
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    # Clear existing data
+    cursor.execute("DELETE FROM crm_customers")
+    connection.commit()
+
+    rows = []
+    customer_id = 1000
+
+    churn_rates = {
+        "North": 0.08,
+        "South": 0.10,
+        "East": 0.22,
+        "West": 0.09,
+    }
+
+    for region in regions:
+        for _ in range(200):
+            churn = random.random() < churn_rates[region]
+            signup = date.today() - timedelta(days=random.randint(30, 365))
+            rows.append((customer_id, region, churn, signup))
+            customer_id += 1
+
+    query = """
+        INSERT INTO crm_customers
+        (customer_id, region, churn, signup_date)
+        VALUES (%s, %s, %s, %s)
+    """
+
+    cursor.executemany(query, rows)
+    connection.commit()
+    print(f"Inserted {len(rows)} CRM records.")
+
+    cursor.close()
+    connection.close()
+
+
 if __name__ == "__main__":
+    print("=" * 60)
+    print("LOADING: ELECTRONICS PRODUCT DATA (Laptops, Phones, Tablets)")
+    print("=" * 60)
     generate_sales_data()
     generate_reviews()
+    generate_crm_data()
+    print("✓ Electronics dataset loaded successfully")
